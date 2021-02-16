@@ -97,8 +97,8 @@ def download_image(row):
                 # some sites respond with gzip transport encoding
                 response.raw.decode_content = True
                 out_file.write(response.content)
-            row['mimetype'] = magic.from_file(row['file'], mime=True)
-            row['size'] = os.stat(row['file']).st_size
+            row['mimetype'] = magic.from_file(fname, mime=True)
+            row['size'] = os.stat(fname).st_size
         except:
             # This is if it times out during a download or decode
             row['status'] = 408
