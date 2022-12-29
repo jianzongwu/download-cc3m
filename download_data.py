@@ -8,6 +8,10 @@ import magic #pip install python-magic
 from multiprocessing import Pool
 from tqdm import tqdm
 
+import json
+import argparse
+from PIL import Image
+
 headers = {
     #'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36',
     'User-Agent':'Googlebot-Image/1.0', # Pretend to be googlebot
@@ -43,9 +47,10 @@ def df_multiprocess(df, processes, chunk_size, func, dataset_name):
     print("Finished Downloading.")
     return
 
-# Unique name based on url
+# Unique name based on index
 def _file_name(row):
-    return "%s/%s_%s" % (row['folder'], row.name, (zlib.crc32(row['url'].encode('utf-8')) & 0xffffffff))
+    # return "%s/%s_%s.jpg" % (row['folder'], row.name, (zlib.crc32(row['url'].encode('utf-8')) & 0xffffffff))
+    return "%s/%s.jpg" % (row['folder'], row.name + 1)
 
 # For checking mimetypes separately without download
 def check_mimetype(row):
@@ -76,9 +81,14 @@ def download_image(row):
     # Skip Already downloaded, retry others later
     if os.path.isfile(fname):
         row['status'] = 200
-        row['file'] = fname
-        row['mimetype'] = magic.from_file(row['file'], mime=True)
-        row['size'] = os.stat(row['file']).st_size
+        img = Image.open(open(fname, "rb"))
+        img = np.asarray(img.convert("RGB"))
+        row['h'], row['w'] = img.shape[:2]
+        row['id'] = int(fname.split('/')[-1].split('.')[0])
+        row['file_name'] = fname.split('/')[-1]
+        # row['file'] = fname
+        # row['mimetype'] = magic.from_file(row['file'], mime=True)
+        # row['size'] = os.stat(row['file']).st_size
         return row
 
     try:
@@ -97,18 +107,23 @@ def download_image(row):
                 # some sites respond with gzip transport encoding
                 response.raw.decode_content = True
                 out_file.write(response.content)
-            row['mimetype'] = magic.from_file(fname, mime=True)
-            row['size'] = os.stat(fname).st_size
+            img = Image.open(open(fname, "rb"))
+            img = np.asarray(img.convert("RGB"))
+            row['h'], row['w'] = img.shape[:2]
+            row['id'] = int(fname.split('/')[-1].split('.')[0])
+            row['file_name'] = fname.split('/')[-1]
+            # row['mimetype'] = magic.from_file(fname, mime=True)
+            # row['size'] = os.stat(fname).st_size
         except:
             # This is if it times out during a download or decode
             row['status'] = 408
             return row
-        row['file'] = fname
+        # row['file'] = fname
     return row
 
 def open_tsv(fname, folder):
     print("Opening %s Data File..." % fname)
-    df = pd.read_csv(fname, sep='\t', names=["caption","url"], usecols=range(1,2))
+    df = pd.read_csv(fname, sep='\t', names=["caption","url"])
     df['folder'] = folder
     print("Processing", len(df), " Images:")
     return df
@@ -120,21 +135,28 @@ def df_from_shelve(chunk_size, func, dataset_name):
         df = pd.concat([results[str(k)][1] for k in keylist], sort=True)
     return df
 
-# number of processes in the pool can be larger than cores
-num_processes = 32
-# chunk_size is how many images per chunk per process - changing this resets progress when restarting.
-images_per_part = 100
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--ann', default='./Train_GCC-training.tsv')
+    parser.add_argument('--save_image_path', default='/data00/cc3m/training')
+    args = parser.parse_args()
 
-data_name = "validation"
-df = open_tsv("Validation_GCC-1.1.0-Validation.tsv", data_name)
-df_multiprocess(df=df, processes=num_processes, chunk_size=images_per_part, func=download_image, dataset_name=data_name)
-df = df_from_shelve(chunk_size=images_per_part, func=download_image, dataset_name=data_name)
-df.to_csv("downloaded_%s_report.tsv.gz" % data_name, compression='gzip', sep='\t', header=False, index=False)
-print("Saved.")
+    # number of processes in the pool can be larger than cores
+    num_processes = 32
+    # num_processes = 1
+    # chunk_size is how many images per chunk per process - changing this resets progress when restarting.
+    images_per_part = 100
 
-data_name = "training"
-df = open_tsv("Train_GCC-training.tsv",data_name)
-df_multiprocess(df=df, processes=num_processes, chunk_size=images_per_part, func=download_image, dataset_name=data_name)
-df = df_from_shelve(chunk_size=images_per_part, func=download_image, dataset_name=data_name)
-df.to_csv("downloaded_%s_report.tsv.gz" % data_name, compression='gzip', sep='\t', header=False, index=False)
-print("Saved.")
+    # data_name = "validation"
+    # df = open_tsv("Validation_GCC-1.1.0-Validation.tsv", data_name)
+    # df_multiprocess(df=df, processes=num_processes, chunk_size=images_per_part, func=download_image, dataset_name=data_name)
+    # df = df_from_shelve(chunk_size=images_per_part, func=download_image, dataset_name=data_name)
+    # df.to_csv("downloaded_%s_report.tsv.gz" % data_name, compression='gzip', sep='\t', header=False, index=False)
+    # print("Saved.")
+
+    data_name = "training"
+    df = open_tsv(args.ann, args.save_image_path)
+    df_multiprocess(df=df, processes=num_processes, chunk_size=images_per_part, func=download_image, dataset_name=args.save_image_path)
+    df = df_from_shelve(chunk_size=images_per_part, func=download_image, dataset_name=args.save_image_path)
+    df.to_csv("downloaded_%s_report.tsv.gz" % data_name, compression='gzip', sep='\t', header=False, index=False)
+    print("Saved.")
