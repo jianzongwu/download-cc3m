@@ -21,3 +21,5 @@ It should take about a day or two to download the training data, keep an eye on 
 # command
 
 nohup python download_data.py > nohup.out 2>&1 &
+
+nohup scp -P 37604 -r training wjz@162.105.134.219:/data00/cc3m/ > nohup.out 2>&1 &
