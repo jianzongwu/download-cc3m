@@ -17,9 +17,3 @@ Note: A previous version of this script used a different file naming scheme, thi
 A bunch of them will fail to download, and return web pages instead. These will need to be cleaned up later. See `downloaded_validation_report.tsv` after it downloads for HTTP errors. Around 8% of images are gone, based on validation set results. Setting the user agent could fix some errors too maybe - not sure if any requests are rejected by sites based on this.
 
 It should take about a day or two to download the training data, keep an eye on disk space.
-
-# command
-
-nohup python download_data.py > nohup.out 2>&1 &
-
-nohup scp -P 37604 -r training wjz@162.105.134.219:/data00/cc3m/ > nohup.out 2>&1 &
